@@ -653,7 +653,7 @@ local function createGUI()
                 local queueSuccess, queueErr = pcall(function()
                     queue_on_teleport([[
                         print("✅ QUEUE ON TELEPORT EXECUTED!")
-                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss_v2_fixed.lua"))()
+                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss.lua"))()
                     ]])
                 end)
                 
