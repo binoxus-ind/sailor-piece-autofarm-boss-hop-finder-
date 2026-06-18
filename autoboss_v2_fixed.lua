@@ -1,5 +1,5 @@
 -- ============================================================
--- 🔥 AUTO BOSS FARM - FULL FIXED VERSION
+-- 🔥 AUTO BOSS FARM - WITH TELEPORT COUNTDOWN & SERVER HOP DELAY
 -- ============================================================
 
 print("🔥 AUTO BOSS FARM WITH GUI LOADED")
@@ -35,6 +35,9 @@ local function loadConfig()
         KillAuraRange = "200",
         AutoSkill = true,
         isRunning = false,
+        TeleportDelay = true,
+        ReTeleportDistance = 6,
+        ServerHopDelay = 3, -- Delay sebelum hop server (detik)
     }
     
     local success, result = pcall(function()
@@ -90,6 +93,9 @@ _G.BossFarmState = {
     KillAuraRange = loadedConfig.KillAuraRange or "200",
     AutoSkill = loadedConfig.AutoSkill ~= nil and loadedConfig.AutoSkill or true,
     isRunning = loadedConfig.isRunning or false,
+    TeleportDelay = loadedConfig.TeleportDelay ~= nil and loadedConfig.TeleportDelay or true,
+    ReTeleportDistance = loadedConfig.ReTeleportDistance or 6,
+    ServerHopDelay = loadedConfig.ServerHopDelay or 3,
 }
 
 print("[STATE] Loaded config:", _G.BossFarmState)
@@ -115,7 +121,22 @@ _G.BossFarm = {
     lastSkillTime = 0,
     RetryCount = 0,
     MaxRetries = 5,
+    TeleportDelay = _G.BossFarmState.TeleportDelay,
+    ReTeleportDistance = _G.BossFarmState.ReTeleportDistance or 6,
+    ServerHopDelay = _G.BossFarmState.ServerHopDelay or 3,
+    CancelTeleport = false,
 }
+
+-- ============ FUNGSI NOTIFICATION ============
+local function sendNotification(title, text, duration)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 3,
+        })
+    end)
+end
 
 -- ============ BUAT GUI ============
 local function createGUI()
@@ -131,8 +152,8 @@ local function createGUI()
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     mainFrame.BackgroundTransparency = 0.05
     mainFrame.BorderSizePixel = 0
-    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -160)
-    mainFrame.Size = UDim2.new(0, 400, 0, 340)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -240)
+    mainFrame.Size = UDim2.new(0, 420, 0, 480)
     mainFrame.ClipsDescendants = true
     mainFrame.Active = true
     mainFrame.Selectable = true
@@ -204,13 +225,12 @@ local function createGUI()
         _G.BossFarmGUI = nil
     end)
     
-    -- ===== DRAG FUNCTION - FIXED (NO TOUCHBEGAN) =====
+    -- ===== DRAG FUNCTION =====
     local dragging = false
     local dragStart = nil
     local startPos = nil
     local UserInputService = game:GetService("UserInputService")
     
-    -- Cek apakah posisi di dalam title bar
     local function isInTitleBar(position)
         local absPos = titleBar.AbsolutePosition
         local absSize = titleBar.AbsoluteSize
@@ -218,11 +238,9 @@ local function createGUI()
                position.Y >= absPos.Y and position.Y <= absPos.Y + absSize.Y
     end
     
-    -- START DRAG
     UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
-            
             if isInTitleBar(input.Position) then
                 dragging = true
                 dragStart = input.Position
@@ -231,7 +249,6 @@ local function createGUI()
         end
     end)
     
-    -- STOP DRAG
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
@@ -241,7 +258,6 @@ local function createGUI()
         end
     end)
     
-    -- UPDATE DRAG (Mouse Movement)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
@@ -254,7 +270,6 @@ local function createGUI()
         end
     end)
     
-    -- UPDATE DRAG (Touch Movement)
     UserInputService.TouchMoved:Connect(function(touch)
         if dragging and dragStart and startPos then
             local delta = touch.Position - dragStart
@@ -310,7 +325,6 @@ local function createGUI()
             _G.BossFarmState.BossName = nameBox.Text
             _G.BossFarm.BossName = nameBox.Text
             saveConfig(_G.BossFarmState)
-            print("[STATE] Boss Name saved:", _G.BossFarmState.BossName)
         end
     end)
     
@@ -349,7 +363,6 @@ local function createGUI()
             _G.BossFarmState.WeaponName = weaponBox.Text
             _G.BossFarm.WeaponName = weaponBox.Text
             saveConfig(_G.BossFarmState)
-            print("[STATE] Weapon Name saved:", _G.BossFarmState.WeaponName)
         end
     end)
     
@@ -389,7 +402,6 @@ local function createGUI()
             _G.BossFarmState.KillAuraRange = rangeBox.Text
             _G.BossFarm.KillAuraRange = num
             saveConfig(_G.BossFarmState)
-            print("[STATE] Range saved:", _G.BossFarmState.KillAuraRange)
         end
     end)
     
@@ -417,7 +429,111 @@ local function createGUI()
         skillToggle.BackgroundColor3 = _G.BossFarmState.AutoSkill and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         skillToggle.Text = _G.BossFarmState.AutoSkill and "✅ Auto Skill ON" or "❌ Auto Skill OFF"
         saveConfig(_G.BossFarmState)
-        print("[STATE] Auto Skill saved:", _G.BossFarmState.AutoSkill)
+    end)
+    
+    -- ===== TELEPORT DELAY TOGGLE =====
+    local delayToggle = Instance.new("TextButton")
+    delayToggle.Name = "DelayToggle"
+    delayToggle.Parent = content
+    delayToggle.BackgroundColor3 = _G.BossFarmState.TeleportDelay and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    delayToggle.BorderSizePixel = 0
+    delayToggle.Position = UDim2.new(0, 0, 0, 195)
+    delayToggle.Size = UDim2.new(1, 0, 0, 25)
+    delayToggle.Text = _G.BossFarmState.TeleportDelay and "⏱️ Teleport Delay: ON" or "⏱️ Teleport Delay: OFF"
+    delayToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    delayToggle.TextSize = 13
+    delayToggle.Font = Enum.Font.GothamBold
+    
+    local delayCorner = Instance.new("UICorner")
+    delayCorner.Parent = delayToggle
+    delayCorner.CornerRadius = UDim.new(0, 6)
+    
+    delayToggle.MouseButton1Click:Connect(function()
+        _G.BossFarmState.TeleportDelay = not _G.BossFarmState.TeleportDelay
+        _G.BossFarm.TeleportDelay = _G.BossFarmState.TeleportDelay
+        
+        delayToggle.BackgroundColor3 = _G.BossFarmState.TeleportDelay and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        delayToggle.Text = _G.BossFarmState.TeleportDelay and "⏱️ Teleport Delay: ON" or "⏱️ Teleport Delay: OFF"
+        saveConfig(_G.BossFarmState)
+    end)
+    
+    -- ===== RE-TELEPORT DISTANCE INPUT =====
+    local reTeleLabel = Instance.new("TextLabel")
+    reTeleLabel.Parent = content
+    reTeleLabel.BackgroundTransparency = 1
+    reTeleLabel.Size = UDim2.new(0.5, 0, 0, 25)
+    reTeleLabel.Position = UDim2.new(0, 0, 0, 225)
+    reTeleLabel.Text = "🔄 Re-Teleport at"
+    reTeleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    reTeleLabel.TextSize = 13
+    reTeleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    reTeleLabel.Font = Enum.Font.Gotham
+    
+    local reTeleBox = Instance.new("TextBox")
+    reTeleBox.Name = "ReTeleBox"
+    reTeleBox.Parent = content
+    reTeleBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    reTeleBox.BorderSizePixel = 0
+    reTeleBox.Position = UDim2.new(0.5, 0, 0, 225)
+    reTeleBox.Size = UDim2.new(0.2, 0, 0, 25)
+    reTeleBox.PlaceholderText = "6"
+    reTeleBox.Text = tostring(_G.BossFarmState.ReTeleportDistance or 6)
+    reTeleBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    reTeleBox.TextSize = 13
+    reTeleBox.Font = Enum.Font.Gotham
+    reTeleBox.ClearTextOnFocus = false
+    
+    local reTeleCorner = Instance.new("UICorner")
+    reTeleCorner.Parent = reTeleBox
+    reTeleCorner.CornerRadius = UDim.new(0, 6)
+    
+    reTeleBox.FocusLost:Connect(function()
+        local num = tonumber(reTeleBox.Text)
+        if num and num > 0 then
+            _G.BossFarmState.ReTeleportDistance = num
+            _G.BossFarm.ReTeleportDistance = num
+            saveConfig(_G.BossFarmState)
+        end
+    end)
+    
+    -- ===== SERVER HOP DELAY INPUT (NEW) =====
+    local hopDelayLabel = Instance.new("TextLabel")
+    hopDelayLabel.Parent = content
+    hopDelayLabel.BackgroundTransparency = 1
+    hopDelayLabel.Size = UDim2.new(0.5, 0, 0, 25)
+    hopDelayLabel.Position = UDim2.new(0, 0, 0, 255)
+    hopDelayLabel.Text = "🌐 Server Hop Delay"
+    hopDelayLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    hopDelayLabel.TextSize = 13
+    hopDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
+    hopDelayLabel.Font = Enum.Font.Gotham
+    
+    local hopDelayBox = Instance.new("TextBox")
+    hopDelayBox.Name = "HopDelayBox"
+    hopDelayBox.Parent = content
+    hopDelayBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    hopDelayBox.BorderSizePixel = 0
+    hopDelayBox.Position = UDim2.new(0.5, 0, 0, 255)
+    hopDelayBox.Size = UDim2.new(0.2, 0, 0, 25)
+    hopDelayBox.PlaceholderText = "3"
+    hopDelayBox.Text = tostring(_G.BossFarmState.ServerHopDelay or 3)
+    hopDelayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hopDelayBox.TextSize = 13
+    hopDelayBox.Font = Enum.Font.Gotham
+    hopDelayBox.ClearTextOnFocus = false
+    
+    local hopDelayCorner = Instance.new("UICorner")
+    hopDelayCorner.Parent = hopDelayBox
+    hopDelayCorner.CornerRadius = UDim.new(0, 6)
+    
+    hopDelayBox.FocusLost:Connect(function()
+        local num = tonumber(hopDelayBox.Text)
+        if num and num > 0 then
+            _G.BossFarmState.ServerHopDelay = num
+            _G.BossFarm.ServerHopDelay = num
+            saveConfig(_G.BossFarmState)
+            print("[STATE] Server Hop Delay saved:", num)
+        end
     end)
     
     -- ===== RETRY COUNTER LABEL =====
@@ -426,7 +542,7 @@ local function createGUI()
     retryLabel.Parent = content
     retryLabel.BackgroundTransparency = 1
     retryLabel.Size = UDim2.new(1, 0, 0, 20)
-    retryLabel.Position = UDim2.new(0, 0, 0, 195)
+    retryLabel.Position = UDim2.new(0, 0, 0, 285)
     retryLabel.Text = ""
     retryLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
     retryLabel.TextSize = 12
@@ -438,7 +554,7 @@ local function createGUI()
     statusLabel.Parent = content
     statusLabel.BackgroundTransparency = 1
     statusLabel.Size = UDim2.new(1, 0, 0, 25)
-    statusLabel.Position = UDim2.new(0, 0, 0, 210)
+    statusLabel.Position = UDim2.new(0, 0, 0, 305)
     statusLabel.Text = _G.BossFarm.isRunning and "🔄 Running" or "⏸️ Idle"
     statusLabel.TextColor3 = _G.BossFarm.isRunning and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(150, 150, 150)
     statusLabel.TextSize = 14
@@ -450,7 +566,7 @@ local function createGUI()
     actionBtn.Parent = content
     actionBtn.BackgroundColor3 = _G.BossFarm.isRunning and Color3.fromRGB(255, 70, 70) or Color3.fromRGB(50, 150, 255)
     actionBtn.BorderSizePixel = 0
-    actionBtn.Position = UDim2.new(0, 0, 0, 240)
+    actionBtn.Position = UDim2.new(0, 0, 0, 335)
     actionBtn.Size = UDim2.new(1, 0, 0, 40)
     actionBtn.Text = _G.BossFarm.isRunning and "⏹️ Stop" or "▶️ Start"
     actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -507,10 +623,81 @@ local function createGUI()
         return nil, false
     end
     
+    -- ===== TELEPORT COUNTDOWN =====
+    local function teleportCountdown()
+        if not _G.BossFarm.TeleportDelay then
+            return true
+        end
+        
+        _G.BossFarm.CancelTeleport = false
+        local countdown = 2
+        
+        sendNotification("⏱️ Teleport in " .. countdown .. "s", "Click STOP to cancel", 3)
+        
+        while countdown > 0 do
+            if _G.BossFarm.CancelTeleport then
+                sendNotification("❌ Teleport Cancelled", "You stopped the teleport", 2)
+                return false
+            end
+            
+            if not _G.BossFarm.isRunning then
+                return false
+            end
+            
+            if countdown > 1 then
+                sendNotification("⏱️ Teleport in " .. countdown .. "s", "Click STOP to cancel", 1)
+            end
+            
+            task.wait(1)
+            countdown = countdown - 1
+        end
+        
+        if _G.BossFarm.CancelTeleport or not _G.BossFarm.isRunning then
+            return false
+        end
+        
+        sendNotification("🚀 Teleporting!", "Moving to boss location", 2)
+        return true
+    end
+    
+    -- ===== SERVER HOP DELAY =====
+    local function serverHopDelay()
+        local delay = _G.BossFarm.ServerHopDelay or 3
+        if delay <= 0 then return true end
+        
+        debugPrint("⏳ Server hop delay:", delay, "detik")
+        sendNotification("⏳ Hopping in " .. delay .. "s", "Click STOP to cancel", 3)
+        
+        for i = delay, 1, -1 do
+            if not _G.BossFarm.isRunning then
+                debugPrint("❌ Hop cancelled - farm stopped")
+                return false
+            end
+            
+            if i > 1 then
+                sendNotification("⏳ Hopping in " .. i .. "s", "Click STOP to cancel", 1)
+            end
+            task.wait(1)
+        end
+        
+        if not _G.BossFarm.isRunning then
+            return false
+        end
+        
+        sendNotification("🌐 Hopping Server!", "Searching for boss...", 2)
+        return true
+    end
+    
     -- ===== HOP SERVER =====
     local function hopServerWithQueue()
         debugPrint("🔄 Hopping ke server baru...")
         _G.BossFarm.RetryCount = 0
+        
+        -- ===== SERVER HOP DELAY =====
+        if not serverHopDelay() then
+            debugPrint("⚠️ Server hop cancelled!")
+            return false
+        end
         
         local TeleportService = game:GetService("TeleportService")
         local placeId = game.PlaceId
@@ -562,15 +749,9 @@ local function createGUI()
         return false
     end
     
-    -- ===== TELEPORT KE BOSS =====
-    local function teleportToBossWithRetry(boss)
-        debugPrint("🚀 Teleport ke boss...")
-        _G.BossFarm.RetryCount = 0
-        
-        if not boss then
-            debugPrint("❌ Boss is nil!")
-            return false
-        end
+    -- ===== GET TARGET PART =====
+    local function getTargetPart(boss)
+        if not boss then return nil end
         
         local targetPart = boss:FindFirstChild("HumanoidRootPart")
         if not targetPart then
@@ -584,7 +765,17 @@ local function createGUI()
                 end
             end
         end
+        return targetPart
+    end
+    
+    -- ===== TELEPORT KE BOSS =====
+    local function teleportToBoss(boss)
+        if not boss then
+            debugPrint("❌ Boss is nil!")
+            return false
+        end
         
+        local targetPart = getTargetPart(boss)
         if not targetPart then
             debugPrint("❌ No valid part found!")
             return false
@@ -602,38 +793,99 @@ local function createGUI()
             return false
         end
         
-        while _G.BossFarm.RetryCount < _G.BossFarm.MaxRetries do
-            _G.BossFarm.RetryCount = _G.BossFarm.RetryCount + 1
-            retryLabel.Text = "🔄 Teleport Retry " .. _G.BossFarm.RetryCount .. "/" .. _G.BossFarm.MaxRetries
-            
-            local bossPos = targetPart.Position
-            local targetCFrame = targetPart.CFrame * CFrame.new(0, 0, 5)
-            rootPart.CFrame = targetCFrame
-            
-            task.wait(0.2)
-            local afterPos = rootPart.Position
-            local distance = (afterPos - bossPos).Magnitude
-            
-            if distance <= 15 then
-                debugPrint("✅ Teleport BERHASIL! Distance:", distance)
-                retryLabel.Text = "✅ Teleport success!"
-                task.wait(0.5)
-                retryLabel.Text = ""
-                _G.BossFarm.RetryCount = 0
-                return true
-            else
-                debugPrint("⚠️ Teleport attempt #" .. _G.BossFarm.RetryCount .. " failed")
-                retryLabel.Text = "❌ Retry " .. _G.BossFarm.RetryCount .. " failed"
-                task.wait(1)
-            end
+        -- Teleport
+        local bossPos = targetPart.Position
+        local targetCFrame = targetPart.CFrame * CFrame.new(0, 0, 5)
+        rootPart.CFrame = targetCFrame
+        
+        task.wait(0.2)
+        local afterPos = rootPart.Position
+        local distance = (afterPos - bossPos).Magnitude
+        
+        debugPrint("📏 Jarak ke boss:", distance, "studs")
+        
+        if distance <= 15 then
+            debugPrint("✅ Teleport BERHASIL! Distance:", distance)
+            return true
+        else
+            debugPrint("⚠️ Teleport GAGAL! Distance:", distance)
+            return false
+        end
+    end
+    
+    -- ===== TELEPORT DENGAN COUNTDOWN & RE-TELEPORT =====
+    local function teleportWithCountdownAndRetry(boss)
+        debugPrint("🚀 Memulai proses teleport...")
+        
+        -- COUNTDOWN
+        if not teleportCountdown() then
+            debugPrint("⚠️ Teleport cancelled by user!")
+            return false
         end
         
-        debugPrint("⚠️ All teleport retries failed!")
-        retryLabel.Text = "⚠️ Teleport failed"
-        task.wait(1)
-        retryLabel.Text = ""
-        _G.BossFarm.RetryCount = 0
-        return false
+        -- TELEPORT
+        local success = teleportToBoss(boss)
+        
+        if success then
+            return true
+        else
+            -- RE-TELEPORT OTOMATIS
+            debugPrint("🔄 Teleport gagal, mencoba re-teleport...")
+            sendNotification("🔄 Re-Teleporting", "Attempting again...", 2)
+            
+            -- Coba ulang 3x
+            for i = 1, 3 do
+                if not _G.BossFarm.isRunning then
+                    return false
+                end
+                
+                retryLabel.Text = "🔄 Re-Teleport attempt " .. i .. "/3"
+                debugPrint("🔄 Re-teleport attempt #" .. i)
+                
+                task.wait(0.5)
+                success = teleportToBoss(boss)
+                
+                if success then
+                    retryLabel.Text = "✅ Re-Teleport success!"
+                    task.wait(0.5)
+                    retryLabel.Text = ""
+                    sendNotification("✅ Re-Teleport Success!", "Arrived at boss", 2)
+                    return true
+                end
+                
+                task.wait(0.5)
+            end
+            
+            retryLabel.Text = "❌ Re-Teleport failed"
+            task.wait(0.5)
+            retryLabel.Text = ""
+            return false
+        end
+    end
+    
+    -- ===== MONITOR POSISI =====
+    local function monitorPosition(boss)
+        if not boss then return true end
+        
+        local targetPart = getTargetPart(boss)
+        if not targetPart then return true end
+        
+        local player = game.Players.LocalPlayer
+        if not player or not player.Character then return true end
+        
+        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if not rootPart then return true end
+        
+        local distance = (rootPart.Position - targetPart.Position).Magnitude
+        local triggerDistance = _G.BossFarm.ReTeleportDistance or 6
+        
+        if distance > triggerDistance then
+            debugPrint("⚠️ Player terlalu jauh dari boss! Jarak:", distance, ">", triggerDistance)
+            sendNotification("🔄 Player terlalu jauh!", "Re-teleporting...", 2)
+            return false
+        end
+        
+        return true
     end
     
     local function equipWeapon(weaponName)
@@ -718,9 +970,11 @@ local function createGUI()
         _G.BossFarm.lastSkillTime = 0
         _G.BossFarm.CurrentServerId = game.JobId
         _G.BossFarm.RetryCount = 0
+        _G.BossFarm.CancelTeleport = false
         
         updateUI()
         saveConfig(_G.BossFarmState)
+        sendNotification("✅ Auto Farm Started", "Target: " .. _G.BossFarm.BossName, 3)
         
         while _G.BossFarm.isRunning do
             local player = game.Players.LocalPlayer
@@ -749,13 +1003,30 @@ local function createGUI()
                 
                 equipWeapon(_G.BossFarm.WeaponName)
                 
-                local teleportSuccess = teleportToBossWithRetry(boss)
+                -- TELEPORT DENGAN COUNTDOWN & RE-TELEPORT
+                local teleportSuccess = teleportWithCountdownAndRetry(boss)
                 
                 if teleportSuccess then
                     debugPrint("✅ Teleport successful!")
                     _G.BossFarm.killAuraEnabled = true
                     
                     while _G.BossFarm.isRunning and _G.BossFarm.killAuraEnabled do
+                        -- CEK POSISI PLAYER TERHADAP BOSS
+                        if not monitorPosition(boss) then
+                            debugPrint("🔄 Player terlalu jauh, re-teleporting...")
+                            _G.BossFarm.killAuraEnabled = false
+                            
+                            -- Coba re-teleport
+                            local reTeleSuccess = teleportWithCountdownAndRetry(boss)
+                            if reTeleSuccess then
+                                debugPrint("✅ Re-teleport success, resuming kill aura...")
+                                _G.BossFarm.killAuraEnabled = true
+                            else
+                                debugPrint("❌ Re-teleport failed!")
+                                break
+                            end
+                        end
+                        
                         local player2 = game.Players.LocalPlayer
                         if not player2 or not player2.Character then 
                             task.wait(0.1)
@@ -815,10 +1086,12 @@ local function createGUI()
                             end
                         end
                         
+                        -- CEK BOSS MASIH HIDUP
                         local bossCheck, spawned = findBoss(_G.BossFarm.BossName)
                         if not spawned then
                             debugPrint("💀 Boss mati!")
                             _G.BossFarm.killAuraEnabled = false
+                            sendNotification("💀 Boss Defeated!", "Searching for next...", 2)
                             break
                         end
                         
@@ -827,6 +1100,7 @@ local function createGUI()
                 else
                     debugPrint("⚠️ Teleport failed after retries!")
                     statusLabel.Text = "⚠️ Teleport failed"
+                    sendNotification("❌ Teleport Failed", "Retrying...", 2)
                 end
                 
                 task.wait(1)
@@ -857,6 +1131,7 @@ local function createGUI()
         debugPrint("🛑 Auto farm stopped!")
         updateUI()
         saveConfig(_G.BossFarmState)
+        sendNotification("🛑 Auto Farm Stopped", "Farm has been stopped", 2)
     end
     
     -- ============ START/STOP BUTTON ACTION ============
@@ -864,11 +1139,13 @@ local function createGUI()
         if _G.BossFarm.isRunning then
             _G.BossFarm.isRunning = false
             _G.BossFarm.killAuraEnabled = false
+            _G.BossFarm.CancelTeleport = true
             _G.BossFarmState.isRunning = false
             saveConfig(_G.BossFarmState)
             updateUI()
             statusLabel.Text = "⏸️ Stopped"
             retryLabel.Text = ""
+            sendNotification("🛑 Stopped", "Auto farm stopped", 2)
             print("[BUTTON] Stopped")
         else
             _G.BossFarmState.isRunning = true
@@ -879,7 +1156,7 @@ local function createGUI()
         end
     end)
     
-    -- ============ AUTO START JIKA STATE RUNNING ============
+    -- ============ AUTO START ============
     if _G.BossFarmState.isRunning then
         print("[AUTO] Detected running state, auto-starting...")
         task.spawn(autoFarmLoop)
@@ -904,4 +1181,7 @@ print("✅ Boss Farm GUI Loaded!")
 print("📌 Draggable - PC & Mobile (FIXED)")
 print("📌 Config saved to file (permanent)")
 print("📌 Auto resume on reload")
+print("📌 Teleport Delay: 2 seconds (toggle)")
+print("📌 Auto Re-Teleport if too far")
+print("📌 Server Hop Delay: " .. _G.BossFarm.ServerHopDelay .. " seconds")
 print("========================================")
