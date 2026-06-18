@@ -431,7 +431,7 @@ local function createGUI()
                     queue_on_teleport([[
                         print("✅ QUEUE ON TELEPORT EXECUTED!")
                         -- Loaf ulang script dari source
-                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss_v2_fixed.lua))()
+                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss_v2_fixed.lua"))()
                     ]])
                 end)
                 
