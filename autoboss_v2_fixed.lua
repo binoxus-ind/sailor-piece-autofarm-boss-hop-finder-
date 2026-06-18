@@ -397,34 +397,44 @@ local function createGUI()
         _G.BossFarmGUI = nil
     end)
     
-    -- ===== DRAG FUNCTION - MOBILE & PC =====
+    -- ============ DRAG FUNCTION - SIMPLE & WORKING ============
     local dragging = false
     local dragStart = nil
     local startPos = nil
     
-    local function startDrag(input)
+    -- Pake UserInputService untuk semua input (mouse & touch)
+    local UserInputService = game:GetService("UserInputService")
+    
+    UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
+            
+            -- Cek apakah di dalam title bar
+            local mousePos = input.Position
+            local absPos = titleBar.AbsolutePosition
+            local absSize = titleBar.AbsoluteSize
+            
+            if mousePos.X >= absPos.X and mousePos.X <= absPos.X + absSize.X and
+               mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + absSize.Y then
+                dragging = true
+                dragStart = input.Position
+                startPos = mainFrame.Position
+            end
         end
-    end
+    end)
     
-    local function stopDrag(input)
+    UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
             dragStart = nil
             startPos = nil
         end
-    end
+    end)
     
-    local function updateDrag(input)
-        if not dragging or not dragStart or not startPos then return end
-        
-        if input.UserInputType == Enum.UserInputType.MouseMovement or
-           input.UserInputType == Enum.UserInputType.Touch then
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or
+                         input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             mainFrame.Position = UDim2.new(
                 startPos.X.Scale,
@@ -433,23 +443,10 @@ local function createGUI()
                 startPos.Y.Offset + delta.Y
             )
         end
-    end
-    
-    titleBar.InputBegan:Connect(startDrag)
-    titleBar.InputEnded:Connect(stopDrag)
-    titleBar.TouchBegan:Connect(function(touch)
-        dragging = true
-        dragStart = touch.Position
-        startPos = mainFrame.Position
-    end)
-    titleBar.TouchEnded:Connect(function()
-        dragging = false
-        dragStart = nil
-        startPos = nil
     end)
     
-    game:GetService("UserInputService").InputChanged:Connect(updateDrag)
-    game:GetService("UserInputService").TouchMoved:Connect(function(touch)
+    -- TouchMoved buat touch yang lebih smooth
+    UserInputService.TouchMoved:Connect(function(touch)
         if dragging and dragStart and startPos then
             local delta = touch.Position - dragStart
             mainFrame.Position = UDim2.new(
