@@ -1,5 +1,5 @@
 -- ============================================================
--- 🔥 AUTO BOSS FARM - FIXED HOP & QUEUE
+-- 🔥 AUTO BOSS FARM - DENGAN SAVE STATE BUTTON
 -- ============================================================
 
 print("🔥 AUTO BOSS FARM WITH GUI LOADED")
@@ -31,7 +31,7 @@ _G.BossFarm = {
     SkillDelay = 0.5,
     CurrentServerId = game.JobId,
     killAuraEnabled = false,
-    isRunning = _G.BossFarmState.isRunning or false,
+    isRunning = _G.BossFarmState.isRunning or false, -- LOAD STATE RUNNING
     lastSkillTime = 0,
     RetryCount = 0,
     MaxRetries = 5,
@@ -203,6 +203,7 @@ local function createGUI()
         if nameBox.Text ~= "" then
             _G.BossFarmState.BossName = nameBox.Text
             _G.BossFarm.BossName = nameBox.Text
+            print("[STATE] Boss Name saved:", _G.BossFarmState.BossName)
         end
     end)
     
@@ -240,6 +241,7 @@ local function createGUI()
         if weaponBox.Text ~= "" then
             _G.BossFarmState.WeaponName = weaponBox.Text
             _G.BossFarm.WeaponName = weaponBox.Text
+            print("[STATE] Weapon Name saved:", _G.BossFarmState.WeaponName)
         end
     end)
     
@@ -278,6 +280,7 @@ local function createGUI()
         if num then
             _G.BossFarmState.KillAuraRange = rangeBox.Text
             _G.BossFarm.KillAuraRange = num
+            print("[STATE] Range saved:", _G.BossFarmState.KillAuraRange)
         end
     end)
     
@@ -304,6 +307,7 @@ local function createGUI()
         
         skillToggle.BackgroundColor3 = _G.BossFarmState.AutoSkill and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         skillToggle.Text = _G.BossFarmState.AutoSkill and "✅ Auto Skill ON" or "❌ Auto Skill OFF"
+        print("[STATE] Auto Skill saved:", _G.BossFarmState.AutoSkill)
     end)
     
     -- ===== RETRY COUNTER LABEL =====
@@ -393,7 +397,7 @@ local function createGUI()
         return nil, false
     end
     
-    -- ===== HOP SERVER - FIXED (TANPA QUEUE ON TELEPORT YANG BIKIN ERROR) =====
+    -- ===== HOP SERVER =====
     local function hopServerWithQueue()
         debugPrint("🔄 Hopping ke server baru...")
         _G.BossFarm.RetryCount = 0
@@ -407,7 +411,6 @@ local function createGUI()
             return false
         end
         
-        -- PAKE PCALL BUAT HANDLE ERROR
         local success, result = pcall(function()
             return game:GetService("HttpService"):JSONDecode(
                 game:HttpGetAsync("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100")
@@ -426,11 +429,10 @@ local function createGUI()
                 local targetServer = servers[math.random(1, #servers)]
                 debugPrint("🎯 Target server:", targetServer)
                 
-                -- QUEUE ON TELEPORT - PAKE PCALL BIAR GAK ERROR
+                -- QUEUE ON TELEPORT
                 local queueSuccess, queueErr = pcall(function()
                     queue_on_teleport([[
                         print("✅ QUEUE ON TELEPORT EXECUTED!")
-                        -- Loaf ulang script dari source
                         loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss_v2_fixed.lua"))()
                     ]])
                 end)
@@ -442,13 +444,11 @@ local function createGUI()
                     debugPrint("✅ Queue on teleport set!")
                 end
                 
-                -- TELEPORT
                 TeleportService:TeleportToPlaceInstance(placeId, targetServer, player)
                 return true
             end
         end
         
-        -- FALLBACK: TELEPORT BIASA
         debugPrint("🔄 Fallback: Teleport biasa")
         TeleportService:Teleport(placeId)
         return false
@@ -757,17 +757,28 @@ local function createGUI()
     -- ============ START/STOP BUTTON ACTION ============
     actionBtn.MouseButton1Click:Connect(function()
         if _G.BossFarm.isRunning then
+            -- STOP
             _G.BossFarm.isRunning = false
             _G.BossFarm.killAuraEnabled = false
-            _G.BossFarmState.isRunning = false
-            _G.BossFarm.RetryCount = 0
+            _G.BossFarmState.isRunning = false  -- SAVE STATE STOP
             updateUI()
             statusLabel.Text = "⏸️ Stopped"
             retryLabel.Text = ""
+            print("[STATE] Auto farm stopped, state saved: false")
         else
+            -- START
+            _G.BossFarmState.isRunning = true  -- SAVE STATE START
+            print("[STATE] Auto farm started, state saved: true")
             task.spawn(autoFarmLoop)
         end
     end)
+    
+    -- ============ AUTO START JIKA STATE RUNNING ============
+    -- CEK APAKAH SEBELUMNYA SEDANG RUNNING
+    if _G.BossFarmState.isRunning then
+        print("[STATE] Detected running state, auto-starting...")
+        task.spawn(autoFarmLoop)
+    end
     
     -- ============ FINALIZE GUI ============
     updateUI()
@@ -786,5 +797,5 @@ print("========================================")
 print("✅ Boss Farm GUI Loaded!")
 print("📌 Draggable UI - Drag title bar")
 print("📌 Auto Retry on teleport failure")
-print("📌 Click START to begin farming")
+print("📌 State SAVED - Auto resume on reload")
 print("========================================")
