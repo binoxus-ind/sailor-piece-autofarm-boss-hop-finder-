@@ -446,7 +446,7 @@ local function createGUI()
                     
                     queue_on_teleport([[
                         print("✅ QUEUE ON TELEPORT EXECUTED!")
-                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/yourusername/yourscript/main.lua"))()
+                        loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/binoxus-ind/sailor-piece-autofarm-boss-hop-finder-/refs/heads/main/autoboss.lua"))()
                     ]])
                     
                     TeleportService:TeleportToPlaceInstance(placeId, targetServer, player)
