@@ -1,31 +1,91 @@
 -- ============================================================
--- 🔥 AUTO BOSS FARM - DENGAN WRITEFILE & DRAGGABLE MOBILE
+-- 🔥 AUTO BOSS FARM - ULTRA DEBUG MODE
 -- ============================================================
 
-print("🔥 AUTO BOSS FARM WITH GUI LOADED")
+print("🔥🔥🔥 ULTRA DEBUG MODE ACTIVATED 🔥🔥🔥")
 print("========================================")
+
+-- ============ ULTRA DEBUG FUNCTION ============
+local function ultraDebug(...)
+    local args = {...}
+    local msg = ""
+    for i, v in ipairs(args) do
+        if type(v) == "table" then
+            msg = msg .. "{"
+            for k, val in pairs(v) do
+                msg = msg .. tostring(k) .. "=" .. tostring(val) .. ","
+            end
+            msg = msg .. "} "
+        else
+            msg = msg .. tostring(v) .. " "
+        end
+    end
+    print("[ULTRA] " .. msg)
+    warn("[ULTRA-WARN] " .. msg)
+end
+
+ultraDebug("========================================")
+ultraDebug("🚀 ULTRA DEBUG STARTED")
+ultraDebug("========================================")
+
+-- ============ CEK LINGKUNGAN ============
+ultraDebug("[ENV] Checking environment...")
+
+local envChecks = {
+    isfile = isfile ~= nil,
+    readfile = readfile ~= nil,
+    writefile = writefile ~= nil,
+    delfile = delfile ~= nil,
+    loadstring = loadstring ~= nil,
+    pcall = pcall ~= nil,
+}
+
+for name, exists in pairs(envChecks) do
+    ultraDebug("[ENV] " .. name .. ":", exists and "✅" or "❌")
+end
 
 -- ============ FUNGSI READ/WRITE CONFIG ============
 local function getConfigPath()
+    ultraDebug("[CONFIG] Getting config path...")
+    
     local paths = {
         "workspace//BossFarmConfig.json",
         "BossFarmConfig.json",
+        "/mnt/sdcard/Android/data/com.roblox.client/files/BossFarmConfig.json",
     }
     
-    for _, path in pairs(paths) do
-        if pcall(function() return isfile(path) end) then
-            return path
+    for i, path in pairs(paths) do
+        ultraDebug("[CONFIG] Checking path #" .. i .. ":", path)
+        local exists = false
+        local checkSuccess, checkResult = pcall(function()
+            return isfile(path)
+        end)
+        
+        if checkSuccess then
+            exists = checkResult
+            ultraDebug("[CONFIG]   File exists:", exists)
+            if exists then
+                ultraDebug("[CONFIG] ✅ Using path:", path)
+                return path
+            end
+        else
+            ultraDebug("[CONFIG]   ❌ Error checking file:", checkResult)
         end
     end
     
+    ultraDebug("[CONFIG] ⚠️ No existing config found, using default path: workspace//BossFarmConfig.json")
     return "workspace//BossFarmConfig.json"
 end
 
 local CONFIG_PATH = getConfigPath()
-print("[CONFIG] Using path:", CONFIG_PATH)
+ultraDebug("[CONFIG] Final path:", CONFIG_PATH)
 
--- ============ LOAD CONFIG DARI FILE ============
+-- ============ LOAD CONFIG DENGAN ULTRA DEBUG ============
 local function loadConfig()
+    ultraDebug("========================================")
+    ultraDebug("[LOAD] 🔍 STARTING LOAD CONFIG")
+    ultraDebug("[LOAD] Path:", CONFIG_PATH)
+    
     local defaultConfig = {
         BossName = "StrongestShinobiBoss",
         WeaponName = "Atomic",
@@ -33,52 +93,184 @@ local function loadConfig()
         AutoSkill = true,
         isRunning = false,
     }
+    ultraDebug("[LOAD] Default config:", defaultConfig)
     
-    local success, result = pcall(function()
+    -- STEP 1: Cek apakah file ada
+    ultraDebug("[LOAD] Step 1: Checking if file exists...")
+    local fileExists = false
+    local checkSuccess, checkResult = pcall(function()
         return isfile(CONFIG_PATH)
     end)
     
-    if success and result then
-        local readSuccess, content = pcall(function()
-            return readfile(CONFIG_PATH)
-        end)
-        
-        if readSuccess and content and content ~= "" then
-            local decodeSuccess, config = pcall(function()
-                return game:GetService("HttpService"):JSONDecode(content)
-            end)
-            
-            if decodeSuccess and config then
-                print("[CONFIG] Config loaded from file!")
-                return config
-            end
+    if checkSuccess then
+        fileExists = checkResult
+        ultraDebug("[LOAD]   File exists:", fileExists)
+    else
+        ultraDebug("[LOAD]   ❌ Error checking file:", checkResult)
+    end
+    
+    if not fileExists then
+        ultraDebug("[LOAD] ⚠️ File not found, using default config")
+        ultraDebug("[LOAD] ✅ Load complete (default)")
+        return defaultConfig
+    end
+    
+    -- STEP 2: Baca file
+    ultraDebug("[LOAD] Step 2: Reading file...")
+    local content = ""
+    local readSuccess, readResult = pcall(function()
+        return readfile(CONFIG_PATH)
+    end)
+    
+    if readSuccess then
+        content = readResult or ""
+        ultraDebug("[LOAD]   File content length:", #content)
+        ultraDebug("[LOAD]   File content preview:", content:sub(1, 100) .. "...")
+    else
+        ultraDebug("[LOAD]   ❌ Error reading file:", readResult)
+        ultraDebug("[LOAD] ⚠️ Using default config")
+        return defaultConfig
+    end
+    
+    if content == "" then
+        ultraDebug("[LOAD] ⚠️ File is empty, using default config")
+        return defaultConfig
+    end
+    
+    -- STEP 3: Decode JSON
+    ultraDebug("[LOAD] Step 3: Decoding JSON...")
+    local decodedConfig = nil
+    local decodeSuccess, decodeResult = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(content)
+    end)
+    
+    if decodeSuccess and decodeResult then
+        decodedConfig = decodeResult
+        ultraDebug("[LOAD] ✅ JSON decoded successfully!")
+        ultraDebug("[LOAD]   Decoded config:", decodedConfig)
+    else
+        ultraDebug("[LOAD]   ❌ Error decoding JSON:", decodeResult)
+        ultraDebug("[LOAD] ⚠️ Using default config")
+        return defaultConfig
+    end
+    
+    -- STEP 4: Merge dengan default
+    ultraDebug("[LOAD] Step 4: Merging with default config...")
+    local mergedConfig = {}
+    for key, value in pairs(defaultConfig) do
+        if decodedConfig[key] ~= nil then
+            mergedConfig[key] = decodedConfig[key]
+            ultraDebug("[LOAD]   ✅ " .. key .. ": " .. tostring(value) .. " → " .. tostring(decodedConfig[key]))
+        else
+            mergedConfig[key] = value
+            ultraDebug("[LOAD]   ⚠️ " .. key .. ": using default → " .. tostring(value))
         end
     end
     
-    print("[CONFIG] Using default config")
-    return defaultConfig
+    ultraDebug("[LOAD] ✅ Load complete!")
+    ultraDebug("[LOAD] Final config:", mergedConfig)
+    ultraDebug("========================================")
+    
+    return mergedConfig
 end
 
--- ============ SAVE CONFIG KE FILE ============
+-- ============ SAVE CONFIG DENGAN ULTRA DEBUG ============
 local function saveConfig(config)
-    local success, json = pcall(function()
+    ultraDebug("========================================")
+    ultraDebug("[SAVE] 💾 STARTING SAVE CONFIG")
+    ultraDebug("[SAVE] Path:", CONFIG_PATH)
+    ultraDebug("[SAVE] Config to save:", config)
+    
+    -- STEP 1: Encode ke JSON
+    ultraDebug("[SAVE] Step 1: Encoding to JSON...")
+    local json = ""
+    local encodeSuccess, encodeResult = pcall(function()
         return game:GetService("HttpService"):JSONEncode(config)
     end)
     
-    if success and json then
-        local writeSuccess, err = pcall(function()
-            writefile(CONFIG_PATH, json)
+    if encodeSuccess and encodeResult then
+        json = encodeResult
+        ultraDebug("[SAVE] ✅ JSON encoded successfully!")
+        ultraDebug("[SAVE]   JSON length:", #json)
+        ultraDebug("[SAVE]   JSON preview:", json:sub(1, 100) .. "...")
+    else
+        ultraDebug("[SAVE]   ❌ Error encoding JSON:", encodeResult)
+        ultraDebug("[SAVE] ❌ Save failed!")
+        ultraDebug("========================================")
+        return false
+    end
+    
+    -- STEP 2: Write ke file
+    ultraDebug("[SAVE] Step 2: Writing to file...")
+    local writeSuccess, writeResult = pcall(function()
+        writefile(CONFIG_PATH, json)
+    end)
+    
+    if writeSuccess then
+        ultraDebug("[SAVE] ✅ File written successfully!")
+        
+        -- STEP 3: Verify
+        ultraDebug("[SAVE] Step 3: Verifying...")
+        local verifySuccess, verifyResult = pcall(function()
+            return isfile(CONFIG_PATH)
         end)
         
-        if writeSuccess then
-            print("[CONFIG] Config saved to file!")
-            return true
+        if verifySuccess and verifyResult then
+            ultraDebug("[SAVE] ✅ File exists after save!")
+            
+            local readVerify, contentVerify = pcall(function()
+                return readfile(CONFIG_PATH)
+            end)
+            
+            if readVerify and contentVerify then
+                ultraDebug("[SAVE] ✅ File content verified!")
+                ultraDebug("[SAVE]   Content length:", #contentVerify)
+                if contentVerify == json then
+                    ultraDebug("[SAVE] ✅ Content matches!")
+                else
+                    ultraDebug("[SAVE] ⚠️ Content mismatch!")
+                end
+            else
+                ultraDebug("[SAVE] ⚠️ Could not verify content")
+            end
+        else
+            ultraDebug("[SAVE] ⚠️ File not found after save!")
         end
+        
+        ultraDebug("[SAVE] ✅ Save complete!")
+        ultraDebug("========================================")
+        return true
+    else
+        ultraDebug("[SAVE]   ❌ Error writing file:", writeResult)
+        ultraDebug("[SAVE] ❌ Save failed!")
+        ultraDebug("========================================")
+        return false
     end
-    return false
 end
 
--- ============ LOAD STATE ============
+-- ============ TEST READ/WRITE ============
+ultraDebug("[TEST] Running read/write test...")
+
+local testConfig = {
+    test = "success",
+    number = 123,
+    boolean = true,
+    timestamp = os.time(),
+}
+
+ultraDebug("[TEST] Test config:", testConfig)
+
+-- Test save
+local saveTest = saveConfig(testConfig)
+ultraDebug("[TEST] Save test result:", saveTest and "✅" or "❌")
+
+-- Test load
+local loadTest = loadConfig()
+ultraDebug("[TEST] Load test result:", loadTest)
+ultraDebug("[TEST] Load test match:", loadTest.test == "success" and "✅" or "❌")
+
+-- ============ LOAD REAL CONFIG ============
+ultraDebug("[MAIN] Loading real config...")
 local loadedConfig = loadConfig()
 
 _G.BossFarmState = {
@@ -89,10 +281,11 @@ _G.BossFarmState = {
     isRunning = loadedConfig.isRunning or false,
 }
 
-print("[STATE] Loaded config:", _G.BossFarmState)
+ultraDebug("[MAIN] Final BossFarmState:", _G.BossFarmState)
 
 -- ============ CEK APAKAH SUDAH ADA GUI ============
 if _G.BossFarmGUI then
+    ultraDebug("[GUI] Destroying existing GUI...")
     _G.BossFarmGUI:Destroy()
     _G.BossFarmGUI = nil
 end
@@ -114,8 +307,12 @@ _G.BossFarm = {
     MaxRetries = 5,
 }
 
+ultraDebug("[MAIN] BossFarm variables:", _G.BossFarm)
+
 -- ============ BUAT GUI ============
 local function createGUI()
+    ultraDebug("[GUI] Creating GUI...")
+    
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "BossFarmGUI"
     screenGui.ResetOnSpawn = false
@@ -145,12 +342,11 @@ local function createGUI()
     shadow.Size = UDim2.new(0.96, 0, 0.96, 0)
     shadow.ZIndex = 0
     
-    -- Corner
     local corner = Instance.new("UICorner")
     corner.Parent = mainFrame
     corner.CornerRadius = UDim.new(0, 12)
     
-    -- ===== TITLE BAR (DRAGGABLE - MOBILE & PC) =====
+    -- ===== TITLE BAR =====
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
     titleBar.Parent = mainFrame
@@ -166,7 +362,6 @@ local function createGUI()
     titleCorner.Parent = titleBar
     titleCorner.CornerRadius = UDim.new(0, 12)
     
-    -- Title Label
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Parent = titleBar
     titleLabel.BackgroundTransparency = 1
@@ -197,57 +392,40 @@ local function createGUI()
     closeCorner.CornerRadius = UDim.new(0, 6)
     
     closeBtn.MouseButton1Click:Connect(function()
+        ultraDebug("[GUI] Closing GUI...")
         screenGui:Destroy()
         _G.BossFarmGUI = nil
     end)
     
-    -- ===== DRAG FUNCTION - MOBILE & PC PRESISI =====
+    -- ===== DRAG FUNCTION - MOBILE & PC =====
     local dragging = false
     local dragStart = nil
     local startPos = nil
-    local isDragging = false
     
-    -- Fungsi mulai drag (support mouse & touch)
     local function startDrag(input)
-        -- Cek apakah input dari mouse atau touch
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
-            
             dragging = true
-            isDragging = true
             dragStart = input.Position
             startPos = mainFrame.Position
-            
-            -- Debug
-            print("[DRAG] Started - Type:", input.UserInputType.Name)
         end
     end
     
-    -- Fungsi stop drag
     local function stopDrag(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or 
            input.UserInputType == Enum.UserInputType.Touch then
-            
             dragging = false
-            isDragging = false
             dragStart = nil
             startPos = nil
-            
-            print("[DRAG] Stopped")
         end
     end
     
-    -- Fungsi update drag (support mouse & touch)
     local function updateDrag(input)
         if not dragging or not dragStart or not startPos then return end
         
-        -- Support mouse movement dan touch movement
         if input.UserInputType == Enum.UserInputType.MouseMovement or
            input.UserInputType == Enum.UserInputType.Touch then
-            
             local delta = input.Position - dragStart
-            
-            -- Update posisi dengan presisi
             mainFrame.Position = UDim2.new(
                 startPos.X.Scale,
                 startPos.X.Offset + delta.X,
@@ -257,35 +435,20 @@ local function createGUI()
         end
     end
     
-    -- EVENT UNTUK MOUSE
     titleBar.InputBegan:Connect(startDrag)
     titleBar.InputEnded:Connect(stopDrag)
-    
-    -- EVENT UNTUK TOUCH (MOBILE)
     titleBar.TouchBegan:Connect(function(touch)
         dragging = true
-        isDragging = true
         dragStart = touch.Position
         startPos = mainFrame.Position
-        print("[DRAG] Touch started")
     end)
-    
     titleBar.TouchEnded:Connect(function()
         dragging = false
-        isDragging = false
         dragStart = nil
         startPos = nil
-        print("[DRAG] Touch ended")
     end)
     
-    -- EVENT UNTUK MOUSE MOVEMENT
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateDrag(input)
-        end
-    end)
-    
-    -- EVENT UNTUK TOUCH MOVEMENT (MOBILE)
+    game:GetService("UserInputService").InputChanged:Connect(updateDrag)
     game:GetService("UserInputService").TouchMoved:Connect(function(touch)
         if dragging and dragStart and startPos then
             local delta = touch.Position - dragStart
@@ -298,7 +461,7 @@ local function createGUI()
         end
     end)
     
-    -- ===== CONTENT FRAME =====
+    -- ===== CONTENT =====
     local content = Instance.new("Frame")
     content.Name = "Content"
     content.Parent = mainFrame
@@ -338,10 +501,10 @@ local function createGUI()
     
     nameBox.FocusLost:Connect(function()
         if nameBox.Text ~= "" then
+            ultraDebug("[GUI] Boss Name changed to:", nameBox.Text)
             _G.BossFarmState.BossName = nameBox.Text
             _G.BossFarm.BossName = nameBox.Text
             saveConfig(_G.BossFarmState)
-            print("[STATE] Boss Name saved to file:", _G.BossFarmState.BossName)
         end
     end)
     
@@ -377,10 +540,10 @@ local function createGUI()
     
     weaponBox.FocusLost:Connect(function()
         if weaponBox.Text ~= "" then
+            ultraDebug("[GUI] Weapon Name changed to:", weaponBox.Text)
             _G.BossFarmState.WeaponName = weaponBox.Text
             _G.BossFarm.WeaponName = weaponBox.Text
             saveConfig(_G.BossFarmState)
-            print("[STATE] Weapon Name saved to file:", _G.BossFarmState.WeaponName)
         end
     end)
     
@@ -417,10 +580,10 @@ local function createGUI()
     rangeBox.FocusLost:Connect(function()
         local num = tonumber(rangeBox.Text)
         if num then
+            ultraDebug("[GUI] Range changed to:", num)
             _G.BossFarmState.KillAuraRange = rangeBox.Text
             _G.BossFarm.KillAuraRange = num
             saveConfig(_G.BossFarmState)
-            print("[STATE] Range saved to file:", _G.BossFarmState.KillAuraRange)
         end
     end)
     
@@ -447,11 +610,11 @@ local function createGUI()
         
         skillToggle.BackgroundColor3 = _G.BossFarmState.AutoSkill and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         skillToggle.Text = _G.BossFarmState.AutoSkill and "✅ Auto Skill ON" or "❌ Auto Skill OFF"
+        ultraDebug("[GUI] Auto Skill toggled to:", _G.BossFarmState.AutoSkill)
         saveConfig(_G.BossFarmState)
-        print("[STATE] Auto Skill saved to file:", _G.BossFarmState.AutoSkill)
     end)
     
-    -- ===== RETRY COUNTER LABEL =====
+    -- ===== RETRY LABEL =====
     local retryLabel = Instance.new("TextLabel")
     retryLabel.Name = "RetryLabel"
     retryLabel.Parent = content
@@ -891,6 +1054,7 @@ local function createGUI()
     -- ============ START/STOP BUTTON ACTION ============
     actionBtn.MouseButton1Click:Connect(function()
         if _G.BossFarm.isRunning then
+            ultraDebug("[BUTTON] Stop clicked!")
             _G.BossFarm.isRunning = false
             _G.BossFarm.killAuraEnabled = false
             _G.BossFarmState.isRunning = false
@@ -898,38 +1062,55 @@ local function createGUI()
             updateUI()
             statusLabel.Text = "⏸️ Stopped"
             retryLabel.Text = ""
-            print("[STATE] Auto farm stopped, config saved")
         else
+            ultraDebug("[BUTTON] Start clicked!")
             _G.BossFarmState.isRunning = true
             saveConfig(_G.BossFarmState)
-            print("[STATE] Auto farm started, config saved")
+            updateUI()
             task.spawn(autoFarmLoop)
         end
     end)
     
-    -- ============ AUTO START JIKA STATE RUNNING ============
+    -- ============ AUTO START ============
     if _G.BossFarmState.isRunning then
-        print("[STATE] Detected running state from file, auto-starting...")
+        ultraDebug("[AUTO] Detected running state from file, auto-starting...")
         task.spawn(autoFarmLoop)
+    else
+        ultraDebug("[AUTO] State is idle, waiting for user action")
     end
     
-    -- ============ FINALIZE GUI ============
+    -- ============ FINALIZE ============
     updateUI()
     
     _G.BossFarmGUI = screenGui
     screenGui.Parent = game:GetService("CoreGui")
     
-    print("✅ GUI Created Successfully!")
-    print("[STATE] Loaded config:", _G.BossFarmState)
-    print("[CONFIG] Config saved to:", CONFIG_PATH)
+    ultraDebug("[GUI] ✅ GUI Created Successfully!")
+    ultraDebug("[STATE] Final BossFarmState:", _G.BossFarmState)
+    ultraDebug("[CONFIG] Config path:", CONFIG_PATH)
 end
 
 -- ============ CREATE GUI ============
+ultraDebug("[MAIN] Creating GUI...")
 createGUI()
 
-print("========================================")
-print("✅ Boss Farm GUI Loaded!")
-print("📌 Draggable - PC & Mobile")
-print("📌 Config saved to file (permanent)")
-print("📌 Auto resume on reload")
-print("========================================")
+ultraDebug("========================================")
+ultraDebug("✅ ULTRA DEBUG COMPLETE")
+ultraDebug("📌 Draggable - PC & Mobile")
+ultraDebug("📌 Config saved to: " .. CONFIG_PATH)
+ultraDebug("📌 Check console for full debug logs")
+ultraDebug("========================================")
+
+-- ============ TEST ECHO ============
+ultraDebug("[TEST] Final test - checking config file...")
+local testRead = pcall(function()
+    return isfile(CONFIG_PATH)
+end)
+ultraDebug("[TEST] Config file exists:", testRead)
+
+if testRead then
+    local content = pcall(function()
+        return readfile(CONFIG_PATH)
+    end)
+    ultraDebug("[TEST] File content:", content)
+end
