@@ -1,24 +1,101 @@
 -- ============================================================
--- 🔥 AUTO BOSS FARM - DENGAN SAVE STATE BUTTON
+-- 🔥 AUTO BOSS FARM - DENGAN WRITEFILE & DRAGGABLE MOBILE
 -- ============================================================
 
 print("🔥 AUTO BOSS FARM WITH GUI LOADED")
 print("========================================")
+
+-- ============ FUNGSI READ/WRITE CONFIG ============
+local function getConfigPath()
+    local paths = {
+        "workspace//BossFarmConfig.json",
+        "BossFarmConfig.json",
+    }
+    
+    for _, path in pairs(paths) do
+        if pcall(function() return isfile(path) end) then
+            return path
+        end
+    end
+    
+    return "workspace//BossFarmConfig.json"
+end
+
+local CONFIG_PATH = getConfigPath()
+print("[CONFIG] Using path:", CONFIG_PATH)
+
+-- ============ LOAD CONFIG DARI FILE ============
+local function loadConfig()
+    local defaultConfig = {
+        BossName = "StrongestShinobiBoss",
+        WeaponName = "Atomic",
+        KillAuraRange = "200",
+        AutoSkill = true,
+        isRunning = false,
+    }
+    
+    local success, result = pcall(function()
+        return isfile(CONFIG_PATH)
+    end)
+    
+    if success and result then
+        local readSuccess, content = pcall(function()
+            return readfile(CONFIG_PATH)
+        end)
+        
+        if readSuccess and content and content ~= "" then
+            local decodeSuccess, config = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(content)
+            end)
+            
+            if decodeSuccess and config then
+                print("[CONFIG] Config loaded from file!")
+                return config
+            end
+        end
+    end
+    
+    print("[CONFIG] Using default config")
+    return defaultConfig
+end
+
+-- ============ SAVE CONFIG KE FILE ============
+local function saveConfig(config)
+    local success, json = pcall(function()
+        return game:GetService("HttpService"):JSONEncode(config)
+    end)
+    
+    if success and json then
+        local writeSuccess, err = pcall(function()
+            writefile(CONFIG_PATH, json)
+        end)
+        
+        if writeSuccess then
+            print("[CONFIG] Config saved to file!")
+            return true
+        end
+    end
+    return false
+end
+
+-- ============ LOAD STATE ============
+local loadedConfig = loadConfig()
+
+_G.BossFarmState = {
+    BossName = loadedConfig.BossName or "StrongestShinobiBoss",
+    WeaponName = loadedConfig.WeaponName or "Atomic",
+    KillAuraRange = loadedConfig.KillAuraRange or "200",
+    AutoSkill = loadedConfig.AutoSkill ~= nil and loadedConfig.AutoSkill or true,
+    isRunning = loadedConfig.isRunning or false,
+}
+
+print("[STATE] Loaded config:", _G.BossFarmState)
 
 -- ============ CEK APAKAH SUDAH ADA GUI ============
 if _G.BossFarmGUI then
     _G.BossFarmGUI:Destroy()
     _G.BossFarmGUI = nil
 end
-
--- ============ STATE / SETTINGS ============
-_G.BossFarmState = _G.BossFarmState or {
-    BossName = "StrongestShinobiBoss",
-    WeaponName = "Atomic",
-    KillAuraRange = "200",
-    AutoSkill = true,
-    isRunning = false,
-}
 
 -- ============ VARIABEL GLOBAL ============
 _G.BossFarm = {
@@ -31,7 +108,7 @@ _G.BossFarm = {
     SkillDelay = 0.5,
     CurrentServerId = game.JobId,
     killAuraEnabled = false,
-    isRunning = _G.BossFarmState.isRunning or false, -- LOAD STATE RUNNING
+    isRunning = _G.BossFarmState.isRunning or false,
     lastSkillTime = 0,
     RetryCount = 0,
     MaxRetries = 5,
@@ -73,7 +150,7 @@ local function createGUI()
     corner.Parent = mainFrame
     corner.CornerRadius = UDim.new(0, 12)
     
-    -- ===== TITLE BAR (DRAGGABLE) =====
+    -- ===== TITLE BAR (DRAGGABLE - MOBILE & PC) =====
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
     titleBar.Parent = mainFrame
@@ -124,30 +201,53 @@ local function createGUI()
         _G.BossFarmGUI = nil
     end)
     
-    -- ===== DRAG FUNCTION =====
+    -- ===== DRAG FUNCTION - MOBILE & PC PRESISI =====
     local dragging = false
     local dragStart = nil
     local startPos = nil
+    local isDragging = false
     
+    -- Fungsi mulai drag (support mouse & touch)
     local function startDrag(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        -- Cek apakah input dari mouse atau touch
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            
             dragging = true
+            isDragging = true
             dragStart = input.Position
             startPos = mainFrame.Position
+            
+            -- Debug
+            print("[DRAG] Started - Type:", input.UserInputType.Name)
         end
     end
     
+    -- Fungsi stop drag
     local function stopDrag(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            
             dragging = false
+            isDragging = false
             dragStart = nil
             startPos = nil
+            
+            print("[DRAG] Stopped")
         end
     end
     
+    -- Fungsi update drag (support mouse & touch)
     local function updateDrag(input)
-        if dragging and dragStart and startPos and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if not dragging or not dragStart or not startPos then return end
+        
+        -- Support mouse movement dan touch movement
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            
             local delta = input.Position - dragStart
+            
+            -- Update posisi dengan presisi
             mainFrame.Position = UDim2.new(
                 startPos.X.Scale,
                 startPos.X.Offset + delta.X,
@@ -157,9 +257,46 @@ local function createGUI()
         end
     end
     
+    -- EVENT UNTUK MOUSE
     titleBar.InputBegan:Connect(startDrag)
     titleBar.InputEnded:Connect(stopDrag)
-    game:GetService("UserInputService").InputChanged:Connect(updateDrag)
+    
+    -- EVENT UNTUK TOUCH (MOBILE)
+    titleBar.TouchBegan:Connect(function(touch)
+        dragging = true
+        isDragging = true
+        dragStart = touch.Position
+        startPos = mainFrame.Position
+        print("[DRAG] Touch started")
+    end)
+    
+    titleBar.TouchEnded:Connect(function()
+        dragging = false
+        isDragging = false
+        dragStart = nil
+        startPos = nil
+        print("[DRAG] Touch ended")
+    end)
+    
+    -- EVENT UNTUK MOUSE MOVEMENT
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateDrag(input)
+        end
+    end)
+    
+    -- EVENT UNTUK TOUCH MOVEMENT (MOBILE)
+    game:GetService("UserInputService").TouchMoved:Connect(function(touch)
+        if dragging and dragStart and startPos then
+            local delta = touch.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
     
     -- ===== CONTENT FRAME =====
     local content = Instance.new("Frame")
@@ -203,7 +340,8 @@ local function createGUI()
         if nameBox.Text ~= "" then
             _G.BossFarmState.BossName = nameBox.Text
             _G.BossFarm.BossName = nameBox.Text
-            print("[STATE] Boss Name saved:", _G.BossFarmState.BossName)
+            saveConfig(_G.BossFarmState)
+            print("[STATE] Boss Name saved to file:", _G.BossFarmState.BossName)
         end
     end)
     
@@ -241,7 +379,8 @@ local function createGUI()
         if weaponBox.Text ~= "" then
             _G.BossFarmState.WeaponName = weaponBox.Text
             _G.BossFarm.WeaponName = weaponBox.Text
-            print("[STATE] Weapon Name saved:", _G.BossFarmState.WeaponName)
+            saveConfig(_G.BossFarmState)
+            print("[STATE] Weapon Name saved to file:", _G.BossFarmState.WeaponName)
         end
     end)
     
@@ -280,7 +419,8 @@ local function createGUI()
         if num then
             _G.BossFarmState.KillAuraRange = rangeBox.Text
             _G.BossFarm.KillAuraRange = num
-            print("[STATE] Range saved:", _G.BossFarmState.KillAuraRange)
+            saveConfig(_G.BossFarmState)
+            print("[STATE] Range saved to file:", _G.BossFarmState.KillAuraRange)
         end
     end)
     
@@ -307,7 +447,8 @@ local function createGUI()
         
         skillToggle.BackgroundColor3 = _G.BossFarmState.AutoSkill and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         skillToggle.Text = _G.BossFarmState.AutoSkill and "✅ Auto Skill ON" or "❌ Auto Skill OFF"
-        print("[STATE] Auto Skill saved:", _G.BossFarmState.AutoSkill)
+        saveConfig(_G.BossFarmState)
+        print("[STATE] Auto Skill saved to file:", _G.BossFarmState.AutoSkill)
     end)
     
     -- ===== RETRY COUNTER LABEL =====
@@ -429,7 +570,6 @@ local function createGUI()
                 local targetServer = servers[math.random(1, #servers)]
                 debugPrint("🎯 Target server:", targetServer)
                 
-                -- QUEUE ON TELEPORT
                 local queueSuccess, queueErr = pcall(function()
                     queue_on_teleport([[
                         print("✅ QUEUE ON TELEPORT EXECUTED!")
@@ -439,7 +579,6 @@ local function createGUI()
                 
                 if not queueSuccess then
                     debugPrint("⚠️ Queue on teleport error:", queueErr)
-                    debugPrint("🔄 Lanjut teleport tanpa queue...")
                 else
                     debugPrint("✅ Queue on teleport set!")
                 end
@@ -454,7 +593,7 @@ local function createGUI()
         return false
     end
     
-    -- ===== TELEPORT KE BOSS DENGAN AUTO RETRY =====
+    -- ===== TELEPORT KE BOSS =====
     local function teleportToBossWithRetry(boss)
         debugPrint("🚀 Teleport ke boss...")
         _G.BossFarm.RetryCount = 0
@@ -464,8 +603,7 @@ local function createGUI()
             return false
         end
         
-        local targetPart = nil
-        targetPart = boss:FindFirstChild("HumanoidRootPart")
+        local targetPart = boss:FindFirstChild("HumanoidRootPart")
         if not targetPart then
             targetPart = boss.PrimaryPart
         end
@@ -499,8 +637,6 @@ local function createGUI()
             _G.BossFarm.RetryCount = _G.BossFarm.RetryCount + 1
             retryLabel.Text = "🔄 Teleport Retry " .. _G.BossFarm.RetryCount .. "/" .. _G.BossFarm.MaxRetries
             
-            debugPrint("🔄 Teleport attempt #" .. _G.BossFarm.RetryCount)
-            
             local bossPos = targetPart.Position
             local targetCFrame = targetPart.CFrame * CFrame.new(0, 0, 5)
             rootPart.CFrame = targetCFrame
@@ -508,8 +644,6 @@ local function createGUI()
             task.wait(0.2)
             local afterPos = rootPart.Position
             local distance = (afterPos - bossPos).Magnitude
-            
-            debugPrint("📏 Jarak ke boss:", distance, "studs")
             
             if distance <= 15 then
                 debugPrint("✅ Teleport BERHASIL! Distance:", distance)
@@ -519,7 +653,7 @@ local function createGUI()
                 _G.BossFarm.RetryCount = 0
                 return true
             else
-                debugPrint("⚠️ Teleport attempt #" .. _G.BossFarm.RetryCount .. " failed, distance:", distance)
+                debugPrint("⚠️ Teleport attempt #" .. _G.BossFarm.RetryCount .. " failed")
                 retryLabel.Text = "❌ Retry " .. _G.BossFarm.RetryCount .. " failed"
                 task.wait(1)
             end
@@ -757,26 +891,25 @@ local function createGUI()
     -- ============ START/STOP BUTTON ACTION ============
     actionBtn.MouseButton1Click:Connect(function()
         if _G.BossFarm.isRunning then
-            -- STOP
             _G.BossFarm.isRunning = false
             _G.BossFarm.killAuraEnabled = false
-            _G.BossFarmState.isRunning = false  -- SAVE STATE STOP
+            _G.BossFarmState.isRunning = false
+            saveConfig(_G.BossFarmState)
             updateUI()
             statusLabel.Text = "⏸️ Stopped"
             retryLabel.Text = ""
-            print("[STATE] Auto farm stopped, state saved: false")
+            print("[STATE] Auto farm stopped, config saved")
         else
-            -- START
-            _G.BossFarmState.isRunning = true  -- SAVE STATE START
-            print("[STATE] Auto farm started, state saved: true")
+            _G.BossFarmState.isRunning = true
+            saveConfig(_G.BossFarmState)
+            print("[STATE] Auto farm started, config saved")
             task.spawn(autoFarmLoop)
         end
     end)
     
     -- ============ AUTO START JIKA STATE RUNNING ============
-    -- CEK APAKAH SEBELUMNYA SEDANG RUNNING
     if _G.BossFarmState.isRunning then
-        print("[STATE] Detected running state, auto-starting...")
+        print("[STATE] Detected running state from file, auto-starting...")
         task.spawn(autoFarmLoop)
     end
     
@@ -787,7 +920,8 @@ local function createGUI()
     screenGui.Parent = game:GetService("CoreGui")
     
     print("✅ GUI Created Successfully!")
-    print("[STATE] Loaded settings:", _G.BossFarmState)
+    print("[STATE] Loaded config:", _G.BossFarmState)
+    print("[CONFIG] Config saved to:", CONFIG_PATH)
 end
 
 -- ============ CREATE GUI ============
@@ -795,7 +929,7 @@ createGUI()
 
 print("========================================")
 print("✅ Boss Farm GUI Loaded!")
-print("📌 Draggable UI - Drag title bar")
-print("📌 Auto Retry on teleport failure")
-print("📌 State SAVED - Auto resume on reload")
+print("📌 Draggable - PC & Mobile")
+print("📌 Config saved to file (permanent)")
+print("📌 Auto resume on reload")
 print("========================================")
